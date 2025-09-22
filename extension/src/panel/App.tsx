@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import { extractPdfTextFromFile } from "./useLocalPdf";
 import { parseDecision, ParsedDecision, assessVAFingerprint } from "./parseDecision";
+import { ocrPdfFile } from "./useLocalOcr";
 
 // --- Limits ---
 const MAX_FILE_MB = 25;
@@ -18,8 +19,12 @@ export default function App() {
   const [vaSignals, setVaSignals] = useState<string[]>([]);
   const [overrideProceed, setOverrideProceed] = useState(false);
 
-  // NEW: URL import state
+  // URL import
   const [pdfUrl, setPdfUrl] = useState("");
+
+  // OCR state
+  const [lastFile, setLastFile] = useState<File | null>(null);
+  const [ocrPct, setOcrPct] = useState<number>(0);
 
   const handleClose = () => window.parent.postMessage({ type: "VA_AUDIT_CLOSE" }, "*");
   const onPickClick = () => fileInputRef.current?.click();
@@ -32,6 +37,8 @@ export default function App() {
     setLooksLikeVA(null);
     setVaSignals([]);
     setOverrideProceed(false);
+    setLastFile(file);
+    setOcrPct(0);
 
     const sizeMb = file.size / (1024 * 1024);
     if (sizeMb > MAX_FILE_MB) {
@@ -50,7 +57,8 @@ export default function App() {
       setRaw(out.text);
 
       if (!out.hadText) {
-        setError("No selectable text found. This looks like a scanned PDF. OCR is coming soon.");
+        // We will show the OCR button below.
+        setError("No selectable text found. This looks like a scanned PDF. You can run local OCR below.");
       } else {
         const p = parseDecision(out.text);
         setParsed(p);
@@ -77,7 +85,7 @@ export default function App() {
   };
   const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
-  // NEW: Import from URL
+  // Import from URL (existing)
   const onImportUrl = async () => {
     const url = pdfUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
@@ -91,12 +99,12 @@ export default function App() {
     setLooksLikeVA(null);
     setVaSignals([]);
     setOverrideProceed(false);
+    setLastFile(null);
+    setOcrPct(0);
 
     try {
-      const resp = await chrome.runtime.sendMessage({ type: "FETCH_PDF_URL", url }) as any;
+      const resp = (await chrome.runtime.sendMessage({ type: "FETCH_PDF_URL", url })) as any;
       if (!resp?.ok) throw new Error(resp?.error || "Fetch failed");
-
-      // Decode base64 -> Uint8Array -> File, then reuse existing pipeline
       const bytes = base64ToUint8(resp.base64);
       const file = new File([bytes], "import.pdf", { type: "application/pdf" });
       await runExtractionOnFile(file);
@@ -107,6 +115,37 @@ export default function App() {
     }
   };
 
+  // NEW: Run OCR on the last file
+  const onRunOcr = async () => {
+    if (!lastFile) return;
+    setError(null);
+    setBusy(true);
+    setParsed(null);
+    setRaw("");
+    setLooksLikeVA(null);
+    setVaSignals([]);
+    setOverrideProceed(false);
+    setOcrPct(0);
+
+    try {
+      const out = await ocrPdfFile(lastFile, ({ page, pages, pct }) => {
+        setOcrPct(pct);
+      });
+      setRaw(out.text);
+      const p = parseDecision(out.text);
+      setParsed(p);
+      const fp = assessVAFingerprint(out.text, p);
+      setLooksLikeVA(fp.looksLikeVA);
+      setVaSignals(fp.signals);
+    } catch (e: any) {
+      setError(e?.message || "OCR failed.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const showParsedSummary = parsed && (looksLikeVA || overrideProceed);
+
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", height: "100%", display: "flex", flexDirection: "column" }}>
       <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #eee"}}>
@@ -115,7 +154,7 @@ export default function App() {
       </header>
 
       <main style={{ padding: 16, gap: 12, display: "flex", flexDirection: "column", overflow: "auto" }}>
-        {/* NEW: Import from URL */}
+        {/* Import from URL */}
         <section style={{ display: "grid", gap: 8 }}>
           <h3 style={{ margin: 0 }}>Import from URL (optional)</h3>
           <p style={{ margin: 0 }}>Paste a direct link to a PDF (e.g., from VA.gov or Google Drive sharing).</p>
@@ -131,7 +170,7 @@ export default function App() {
             </button>
           </div>
           <div style={{ fontSize: 11, color: "#9e9e9e" }}>
-            If the site blocks cross-origin downloads, we’ll guide you to download the PDF and use the local upload below.
+            If the site blocks cross-origin downloads, download the PDF and use the local upload below.
           </div>
         </section>
 
@@ -159,6 +198,18 @@ export default function App() {
             />
           </div>
         </section>
+
+        {/* If scanned (no text) → show OCR option */}
+        {error?.toLowerCase().includes("scanned") && lastFile && (
+          <div style={bannerInfo}>
+            <div style={{ marginBottom: 8 }}>
+              🛈 This looks like a scanned PDF (no selectable text). You can run **local OCR** below. Your file never leaves your device.
+            </div>
+            <button onClick={onRunOcr} disabled={busy}>
+              {busy ? `Running OCR… ${ocrPct}%` : "Run OCR (Local)"}
+            </button>
+          </div>
+        )}
 
         {/* Confidence banner */}
         {parsed && looksLikeVA && (
@@ -220,7 +271,8 @@ export default function App() {
               <ul style={{ margin: "6px 0 0 18px" }}>
                 {parsed.conditions.slice(0, 5).map((c, i) => (
                   <li key={i}>
-                    VA {c.ratingPercent != null ? <>is paying <b>{c.ratingPercent}%</b> for <b>{c.name}</b></> : <>made a decision on <b>{c.name}</b></>}{c.effectiveDate ? <> starting <b>{c.effectiveDate}</b></> : null}.
+                    VA {c.ratingPercent != null ? <>is paying <b>{c.ratingPercent}%</b> for <b>{c.name}</b></> : <>made a decision on <b>{c.name}</b></>}
+                    {c.effectiveDate ? <> starting <b>{c.effectiveDate}</b></> : null}.
                     {c.diagnosticCode ? <> (Diagnostic Code {c.diagnosticCode})</> : null}
                   </li>
                 ))}
@@ -236,7 +288,7 @@ export default function App() {
           </div>
         )}
 
-        {error && (
+        {error && !error.toLowerCase().includes("scanned") && (
           <div style={{ background: "#fff3cd", border: "1px solid #ffeeba", color: "#856404", padding: 12, borderRadius: 8 }}>
             {error}
           </div>
@@ -260,11 +312,17 @@ const bannerGood: React.CSSProperties = {
   padding: 12,
   borderRadius: 8,
 };
-
 const bannerWarn: React.CSSProperties = {
   background: "#FFF8E1",
   border: "1px solid #FFECB3",
   color: "#7A4F01",
+  padding: 12,
+  borderRadius: 8,
+};
+const bannerInfo: React.CSSProperties = {
+  background: "#E3F2FD",
+  border: "1px solid #BBDEFB",
+  color: "#0D47A1",
   padding: 12,
   borderRadius: 8,
 };
