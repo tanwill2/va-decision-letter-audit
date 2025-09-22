@@ -2,6 +2,7 @@ import React, { useRef, useState } from "react";
 import { extractPdfTextFromFile } from "./useLocalPdf";
 import { parseDecision, ParsedDecision, assessVAFingerprint } from "./parseDecision";
 import { ocrPdfFile } from "./useLocalOcr";
+import { ENABLE_AI, buildAiPayload, requestAiSummary } from "./ai";
 
 // --- Limits ---
 const MAX_FILE_MB = 25;
@@ -26,6 +27,11 @@ export default function App() {
   const [lastFile, setLastFile] = useState<File | null>(null);
   const [ocrPct, setOcrPct] = useState<number>(0);
 
+  // AI state
+  const [cloudConsent, setCloudConsent] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiText, setAiText] = useState<string>("");
+
   const handleClose = () => window.parent.postMessage({ type: "VA_AUDIT_CLOSE" }, "*");
   const onPickClick = () => fileInputRef.current?.click();
 
@@ -39,6 +45,7 @@ export default function App() {
     setOverrideProceed(false);
     setLastFile(file);
     setOcrPct(0);
+    setAiText("");
 
     const sizeMb = file.size / (1024 * 1024);
     if (sizeMb > MAX_FILE_MB) {
@@ -57,7 +64,6 @@ export default function App() {
       setRaw(out.text);
 
       if (!out.hadText) {
-        // We will show the OCR button below.
         setError("No selectable text found. This looks like a scanned PDF. You can run local OCR below.");
       } else {
         const p = parseDecision(out.text);
@@ -85,7 +91,7 @@ export default function App() {
   };
   const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
-  // Import from URL (existing)
+  // Import from URL
   const onImportUrl = async () => {
     const url = pdfUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
@@ -101,6 +107,7 @@ export default function App() {
     setOverrideProceed(false);
     setLastFile(null);
     setOcrPct(0);
+    setAiText("");
 
     try {
       const resp = (await chrome.runtime.sendMessage({ type: "FETCH_PDF_URL", url })) as any;
@@ -115,7 +122,7 @@ export default function App() {
     }
   };
 
-  // NEW: Run OCR on the last file
+  // OCR on last file
   const onRunOcr = async () => {
     if (!lastFile) return;
     setError(null);
@@ -126,11 +133,10 @@ export default function App() {
     setVaSignals([]);
     setOverrideProceed(false);
     setOcrPct(0);
+    setAiText("");
 
     try {
-      const out = await ocrPdfFile(lastFile, ({ page, pages, pct }) => {
-        setOcrPct(pct);
-      });
+      const out = await ocrPdfFile(lastFile, ({ pct }) => setOcrPct(pct));
       setRaw(out.text);
       const p = parseDecision(out.text);
       setParsed(p);
@@ -141,6 +147,27 @@ export default function App() {
       setError(e?.message || "OCR failed.");
     } finally {
       setBusy(false);
+    }
+  };
+
+  // AI summary (stub)
+  const onAiSummary = async () => {
+    if (!parsed) return;
+    if (!cloudConsent && ENABLE_AI) {
+      setError("Please allow cloud processing to use AI Summary.");
+      return;
+    }
+    setError(null);
+    setAiBusy(true);
+    try {
+      const payload = buildAiPayload(raw, parsed);
+      const summary = await requestAiSummary(payload);
+      setAiText(summary);
+    } catch (e: any) {
+      setAiText("");
+      setError(e?.message || "AI summary failed.");
+    } finally {
+      setAiBusy(false);
     }
   };
 
@@ -199,11 +226,11 @@ export default function App() {
           </div>
         </section>
 
-        {/* If scanned (no text) → show OCR option */}
+        {/* If scanned → OCR option */}
         {error?.toLowerCase().includes("scanned") && lastFile && (
           <div style={bannerInfo}>
             <div style={{ marginBottom: 8 }}>
-              🛈 This looks like a scanned PDF (no selectable text). You can run **local OCR** below. Your file never leaves your device.
+              🛈 This looks like a scanned PDF (no selectable text). You can run <b>local OCR</b> below. Your file never leaves your device.
             </div>
             <button onClick={onRunOcr} disabled={busy}>
               {busy ? `Running OCR… ${ocrPct}%` : "Run OCR (Local)"}
@@ -266,17 +293,29 @@ export default function App() {
               </table>
             </div>
 
-            <div style={{ background: "#f6f8fa", border: "1px solid #eaeef2", borderRadius: 8, padding: 12 }}>
-              <strong>What this means (plain English):</strong>
-              <ul style={{ margin: "6px 0 0 18px" }}>
-                {parsed.conditions.slice(0, 5).map((c, i) => (
-                  <li key={i}>
-                    VA {c.ratingPercent != null ? <>is paying <b>{c.ratingPercent}%</b> for <b>{c.name}</b></> : <>made a decision on <b>{c.name}</b></>}
-                    {c.effectiveDate ? <> starting <b>{c.effectiveDate}</b></> : null}.
-                    {c.diagnosticCode ? <> (Diagnostic Code {c.diagnosticCode})</> : null}
-                  </li>
-                ))}
-              </ul>
+            {/* AI section */}
+            <div style={{ display: "grid", gap: 8 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  id="cloudConsent"
+                  type="checkbox"
+                  checked={cloudConsent}
+                  onChange={(e) => setCloudConsent(e.target.checked)}
+                  disabled={!ENABLE_AI}
+                />
+                <label htmlFor="cloudConsent" style={{ userSelect: "none" }}>
+                  Allow cloud processing for AI summary
+                </label>
+                <button onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
+                  {aiBusy ? "Summarizing…" : ENABLE_AI ? "AI Summary" : "AI Summary (coming soon)"}
+                </button>
+              </div>
+
+              {aiText && (
+                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap" }}>
+                  {aiText}
+                </div>
+              )}
             </div>
           </section>
         )}
@@ -304,28 +343,9 @@ export default function App() {
 
 const th: React.CSSProperties = { textAlign: "left", padding: "8px 6px", borderBottom: "1px solid #eee", whiteSpace: "nowrap" };
 const td: React.CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #f2f2f2", verticalAlign: "top" };
-
-const bannerGood: React.CSSProperties = {
-  background: "#E8F5E9",
-  border: "1px solid #C8E6C9",
-  color: "#256029",
-  padding: 12,
-  borderRadius: 8,
-};
-const bannerWarn: React.CSSProperties = {
-  background: "#FFF8E1",
-  border: "1px solid #FFECB3",
-  color: "#7A4F01",
-  padding: 12,
-  borderRadius: 8,
-};
-const bannerInfo: React.CSSProperties = {
-  background: "#E3F2FD",
-  border: "1px solid #BBDEFB",
-  color: "#0D47A1",
-  padding: 12,
-  borderRadius: 8,
-};
+const bannerGood: React.CSSProperties = { background: "#E8F5E9", border: "1px solid #C8E6C9", color: "#256029", padding: 12, borderRadius: 8 };
+const bannerWarn: React.CSSProperties = { background: "#FFF8E1", border: "1px solid #FFECB3", color: "#7A4F01", padding: 12, borderRadius: 8 };
+const bannerInfo: React.CSSProperties = { background: "#E3F2FD", border: "1px solid #BBDEFB", color: "#0D47A1", padding: 12, borderRadius: 8 };
 
 // helper: base64 -> Uint8Array
 function base64ToUint8(b64: string) {
