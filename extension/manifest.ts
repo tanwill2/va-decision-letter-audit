@@ -22,9 +22,6 @@ export default defineManifest({
     }
   ],
   web_accessible_resources: [
-    {
-      resources: ["panel.html"],
-      matches: ["<all_urls>"]
-    }
-  ]
+  { resources: ["panel.html", "assets/*", "pdf.worker.min.mjs"], matches: ["<all_urls>"] }
+  ],
 });
