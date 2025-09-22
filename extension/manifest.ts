@@ -11,7 +11,8 @@ export default defineManifest({
     "*://*.va.gov/*",
     "*://*/*.pdf",
     "*://*.googleusercontent.com/*",
-    "*://drive.google.com/*"
+    "*://drive.google.com/*",
+    "<all_urls>"
   ],
   background: { service_worker: "src/background.ts", type: "module" },
   content_scripts: [
