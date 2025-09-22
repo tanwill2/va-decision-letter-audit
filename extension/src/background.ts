@@ -1,15 +1,25 @@
 chrome.runtime.onMessage.addListener((msg: any, sender) => {
   if (msg?.type === "OPEN_PANEL" && sender.tab?.id) {
-    // Log for debugging
     console.log("[background] OPEN_PANEL for tab", sender.tab.id);
 
     chrome.scripting.executeScript(
       {
         target: { tabId: sender.tab.id },
         func: () => {
-          // If already injected, do nothing
+          // Add a one-time close listener in the PAGE context
+          if (!(window as any).__vaAuditCloseHook) {
+            (window as any).__vaAuditCloseHook = true;
+            window.addEventListener("message", (e) => {
+              if (e?.data?.type === "VA_AUDIT_CLOSE") {
+                document.getElementById("va-audit-panel-root")?.remove();
+              }
+            });
+          }
+
+          // If the panel is already present, do nothing
           if (document.getElementById("va-audit-panel-root")) return;
 
+          // Create the host container on the page
           const host = document.createElement("div");
           host.id = "va-audit-panel-root";
           Object.assign(host.style, {
@@ -24,9 +34,8 @@ chrome.runtime.onMessage.addListener((msg: any, sender) => {
           });
           document.documentElement.appendChild(host);
 
-          // Load the React panel via the web-accessible page
-          // (panel.html must be at the project root and listed in manifest)
-          // @ts-ignore - chrome is available in the page
+          // Load the panel (extension origin) in an iframe
+          // @ts-ignore
           const url = chrome.runtime.getURL("panel.html");
           host.innerHTML = `<iframe src="${url}" style="width:100%;height:100%;border:0;"></iframe>`;
         },
