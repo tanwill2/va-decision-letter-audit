@@ -23,7 +23,8 @@ export default defineManifest({
   // keep minimal host permissions; request others at runtime
   host_permissions: [
     "*://*.va.gov/*",
-    "*://*/*.pdf"
+    "*://*/*.pdf",
+    "https://api.openai.com/*"
   ],
   optional_host_permissions: [
     "<all_urls>",           // we’ll request origin-specific permission when importing a URL
