@@ -8,6 +8,19 @@ import { ENABLE_AI, buildAiPayload, requestAiSummary } from "./ai";
 const MAX_FILE_MB = 25;
 const MAX_PAGES = 60;
 
+async function requestOriginPermission(url: string): Promise<boolean> {
+  try {
+    const origin = new URL(url).origin + "/*";
+    // @ts-ignore types for chrome may not include permissions API; MV3 supports it
+    const granted = await chrome.permissions.request?.({ origins: [origin] });
+    // If the API isn’t available, just proceed (will work for many public URLs anyway)
+    return granted ?? true;
+  } catch {
+    return true;
+  }
+}
+
+
 export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -96,6 +109,12 @@ export default function App() {
     const url = pdfUrl.trim();
     if (!/^https?:\/\//i.test(url)) {
       setError("Please enter a valid http(s) URL to a PDF.");
+      return;
+    }
+    // NEW: ask for permission for that origin (Web Store friendly)
+    const ok = await requestOriginPermission(url);
+    if (!ok) {
+      setError("Permission was not granted for that site. Please download the PDF and use local upload.");
       return;
     }
     setError(null);
@@ -336,6 +355,38 @@ export default function App() {
         <div style={{ fontSize: 11, color: "#9e9e9e", marginTop: 8 }}>
           This tool provides a plain-English summary and possible fields. It is not legal advice.
         </div>
+                <div style={{ fontSize: 11, color: "#9e9e9e", marginTop: 8 }}>
+          This tool provides a plain-English summary and possible fields. It is not legal advice.
+        </div>
+
+        {/* Footer with BMAC + About/Privacy */}
+        <footer style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 12, color: "#607d8b" }}>
+          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+            <a
+              href="https://buymeacoffee.com/tanwill2"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: "none", fontWeight: 600 }}
+              title="Support this project"
+            >
+              ☕ Support on Buy Me a Coffee
+            </a>
+            <span>•</span>
+            <details>
+              <summary style={{ cursor: "pointer" }}>About & Privacy</summary>
+              <div style={{ marginTop: 6, lineHeight: 1.5 }}>
+                <p style={{ margin: 0 }}>
+                  <b>VA Decision Letter Audit</b> helps you read VA decision letters in plain English.
+                  Parsing happens <b>locally</b> in your browser. Your PDFs are <b>not uploaded</b>.
+                </p>
+                <p style={{ margin: "6px 0 0" }}>
+                  If you enable AI later, we’ll clearly ask for consent before any cloud processing.
+                  This tool is not legal advice.
+                </p>
+              </div>
+            </details>
+          </div>
+        </footer>
       </main>
     </div>
   );
