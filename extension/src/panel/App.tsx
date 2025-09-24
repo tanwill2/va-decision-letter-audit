@@ -192,10 +192,17 @@ export default function App() {
                 {aiBusy ? "Summarizing…" : "AI Summary"}
               </button>
             </div>
-
             {aiText && (
-              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap" }}>
-                {aiText}
+              <div style={{ display: "grid", gap: 6 }}>
+                <div style={{ fontSize: 11, color: "#9e9e9e" }}>
+                  ⚠️ This summary is for informational purposes only. It is not legal advice.
+                </div>
+                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap" }}>
+                  {aiText}
+                </div>
+                <div style={{ fontSize: 11, color: "#9e9e9e" }}>
+                  ⚠️ This summary is for informational purposes only. It is not legal advice.
+                </div>
               </div>
             )}
           </div>
