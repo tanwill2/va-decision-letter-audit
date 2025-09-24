@@ -28,7 +28,7 @@ export default function App() {
 
   // Guardrails
   const [looksLikeVA, setLooksLikeVA] = useState<boolean | null>(null);
-  const [vaSignals, setVaSignals] = useState<string[]>([]);
+  const [fpConfidence, setFpConfidence] = useState<"low" | "medium" | "high" | null>(null);
 
 
 
@@ -46,7 +46,6 @@ export default function App() {
     setParsed(null);
     setRaw("");
     setLooksLikeVA(null);
-    setVaSignals([]);
     setAiText("");
 
     const sizeMb = file.size / (1024 * 1024);
@@ -69,7 +68,6 @@ export default function App() {
         setRaw("");
         setParsed(null);
         setLooksLikeVA(null);
-        setVaSignals([]);
         setError(
           "We couldn’t read the words from this file. This usually happens when the letter is a photo/scan instead of real text. " +
           "If possible, try to get a clearer copy of your decision letter or re-save it as a text-based PDF. " +
@@ -85,7 +83,7 @@ export default function App() {
       setParsed(p);
       const fp = assessVAFingerprint(out.text, p);
       setLooksLikeVA(fp.looksLikeVA);
-      setVaSignals(fp.signals);
+      setFpConfidence(fp.confidence);
     } catch (e: any) {
       setError(e?.message || "Could not read that PDF.");
     } finally {
@@ -115,6 +113,11 @@ export default function App() {
   // AI summary
   const onAiSummary = async () => {
     if (!parsed) return;
+      // Hard gate: only allow medium/high confidence
+    if (!looksLikeVA || !(fpConfidence === "medium" || fpConfidence === "high")) {
+      setError("AI analysis is only available for recognized VA decision letters.");
+      return;
+    }
     if (!cloudConsent && ENABLE_AI) {
       setError("Please allow cloud processing to use AI Summary.");
       return;
@@ -169,13 +172,13 @@ export default function App() {
         {/* Confidence banner */}
         {parsed && looksLikeVA && (
           <div style={bannerGood}>
-            ✅ This looks like a VA decision letter. Confidence: <b>{parsed.confidence}</b>
+            ✅ This looks like a VA decision letter. Confidence: <b>{fpConfidence}</b>
             {parsed.combinedRatingStated != null && <> • Combined rating: <b>{parsed.combinedRatingStated}%</b></>}
           </div>
         )}
 
-        {/* AI section (only when guardrail passes) */}
-        {parsed && looksLikeVA && (
+        {/* AI section — gate on medium/high confidence */}
+        {parsed && looksLikeVA && (fpConfidence === "medium" || fpConfidence === "high") && (
           <div style={{ display: "grid", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <input
@@ -192,6 +195,7 @@ export default function App() {
                 {aiBusy ? "Summarizing…" : "AI Summary"}
               </button>
             </div>
+
             {aiText && (
               <div style={{ display: "grid", gap: 6 }}>
                 <div style={{ fontSize: 11, color: "#9e9e9e" }}>
@@ -208,16 +212,16 @@ export default function App() {
           </div>
         )}
 
-        {parsed && looksLikeVA === false && (
-          <div style={bannerWarn}>
-            This doesn’t appear to be a VA decision letter. To protect your privacy and keep this tool free,
-            AI analysis is only available for VA decision letters. Please upload your official VA decision/rating letter.
+        {parsed && (!looksLikeVA || fpConfidence === "low") && (
+          <div style={{ background: "#FFF8E1", border: "1px solid #FFECB3", color: "#7A4F01", padding: 12, borderRadius: 8 }}>
+            This doesn’t appear to be a VA decision letter. To protect your privacy and keep this free,
+            AI analysis is only available for recognized VA decision letters.
             <div style={{ marginTop: 6, fontSize: 12, color: "#7a7a7a" }}>
-              Tips: Look for headings like “Decision”, “Evidence”, “Reasons for Decision”, and phrases like “Diagnostic Code”, “Combined Rating”, or “Effective Date”.
+              Tips: Look for headings like “Decision”, “Evidence”, “Reasons for Decision”, and phrases like “Diagnostic Code”,
+              “Combined Rating”, or “Effective Date”.
             </div>
           </div>
         )}
-
 
         {/* Error banner (friendly text for image-only PDFs included) */}
         {error && (
@@ -258,7 +262,5 @@ export default function App() {
   );
 }
 
-const th: React.CSSProperties = { textAlign: "left", padding: "8px 6px", borderBottom: "1px solid #eee", whiteSpace: "nowrap" };
-const td: React.CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #f2f2f2", verticalAlign: "top" };
 const bannerGood: React.CSSProperties = { background: "#E8F5E9", border: "1px solid #C8E6C9", color: "#256029", padding: 12, borderRadius: 8 };
 const bannerWarn: React.CSSProperties = { background: "#FFF8E1", border: "1px solid #FFECB3", color: "#7A4F01", padding: 12, borderRadius: 8 };

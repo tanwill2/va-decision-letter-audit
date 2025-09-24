@@ -235,7 +235,7 @@ function clampPct(v: string | number) {
 
 export type Fingerprint = {
   looksLikeVA: boolean;
-  score: number;              // 0–100
+  score: number; // 0–100
   confidence: "low" | "medium" | "high";
   signals: string[];
 };
@@ -245,10 +245,12 @@ export function assessVAFingerprint(raw: string, parsed: ParsedDecision): Finger
   const text = raw.toLowerCase();
   let score = 0;
   const signals: string[] = [];
+
   const hit = (cond: boolean, pts: number, label: string) => {
     if (cond) { score += pts; signals.push(label); }
   };
 
+  // Strong indicators
   hit(/\bdepartment of veterans affairs\b/.test(text), 20, "Header: Department of Veterans Affairs");
   hit(/\bdecision\b/.test(text) && /(evidence|reasons?\s+for\s+decision)/i.test(raw), 20, "Sections: Decision + Evidence/Reasons");
   hit(/\bdiagnostic code\b/i.test(raw), 15, "Mentions Diagnostic Code");
@@ -266,7 +268,7 @@ export function assessVAFingerprint(raw: string, parsed: ParsedDecision): Finger
   if (score >= 55) confidence = "high";
   else if (score >= 35) confidence = "medium";
 
-  const looksLikeVA = score >= 35; // require at least medium
+  const looksLikeVA = score >= 35; // gate at medium+
   return { looksLikeVA, score, confidence, signals };
 }
 
