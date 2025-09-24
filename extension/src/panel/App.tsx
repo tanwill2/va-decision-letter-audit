@@ -3,6 +3,16 @@ import { extractPdfTextFromFile } from "./useLocalPdf";
 import { parseDecision, ParsedDecision, assessVAFingerprint } from "./parseDecision";
 import { ENABLE_AI, buildAiPayload, requestAiSummary } from "./ai";
 
+// Read either a PDF or a plain .txt file
+async function extractFromAnyFile(file: File) {
+  if (file.type === "text/plain" || /\.txt$/i.test(file.name)) {
+    const text = await file.text();
+    return { text, hadText: !!text.trim(), pageCount: 1 };
+  }
+  // default: PDF path
+  return await extractPdfTextFromFile(file);
+}
+
 // --- Limits ---
 const MAX_FILE_MB = 25;
 const MAX_PAGES = 60;
@@ -19,7 +29,7 @@ export default function App() {
   // Guardrails
   const [looksLikeVA, setLooksLikeVA] = useState<boolean | null>(null);
   const [vaSignals, setVaSignals] = useState<string[]>([]);
-  const [overrideProceed, setOverrideProceed] = useState(false);
+
 
 
   // AI state
@@ -37,7 +47,6 @@ export default function App() {
     setRaw("");
     setLooksLikeVA(null);
     setVaSignals([]);
-    setOverrideProceed(false);
     setAiText("");
 
     const sizeMb = file.size / (1024 * 1024);
@@ -48,7 +57,7 @@ export default function App() {
     }
 
     try {
-      const out = await extractPdfTextFromFile(file);
+      const out = await extractFromAnyFile(file);
       if (out.pageCount > MAX_PAGES) {
         setBusy(false);
         setError(`This PDF has ${out.pageCount} pages. Limit is ${MAX_PAGES} pages for the MVP.`);
@@ -64,7 +73,7 @@ export default function App() {
         setError(
           "We couldn’t read the words from this file. This usually happens when the letter is a photo/scan instead of real text. " +
           "If possible, try to get a clearer copy of your decision letter or re-save it as a text-based PDF. " +
-          "You can also use a free PDF-to-Text tool (for example: https://www.adobe.com/acrobat/online/pdf-to-text.html) and then upload the result here."
+          "You can also use a free PDF-to-Text tool (for example: https://www.freeconvert.com/pdf-to-text) and then upload the result here."
         );
         return;
       }
@@ -92,7 +101,14 @@ export default function App() {
   const onDrop: React.DragEventHandler<HTMLDivElement> = async (e) => {
     e.preventDefault();
     const f = e.dataTransfer?.files?.[0];
-    if (f && f.type === "application/pdf") onFileChosen(f);
+      if (!f) return;
+      if (
+        f.type === "application/pdf" ||
+        f.type === "text/plain" ||
+        /\.txt$/i.test(f.name)
+      ) {
+        onFileChosen(f);
+      }
   };
   const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
@@ -117,8 +133,6 @@ export default function App() {
     }
   };
 
-  const showParsedSummary = parsed && (looksLikeVA || overrideProceed);
-
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", height: "100%", display: "flex", flexDirection: "column" }}>
       <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #eee"}}>
@@ -129,8 +143,8 @@ export default function App() {
       <main style={{ padding: 16, gap: 12, display: "flex", flexDirection: "column", overflow: "auto" }}>
         {/* Upload area */}
         <section style={{ display: "grid", gap: 8 }}>
-          <h3 style={{ margin: 0 }}>Analyze a local PDF</h3>
-          <p style={{ margin: 0 }}>Choose or drop your VA decision letter PDF. We extract text on your device (no upload).</p>
+          <h3 style={{ margin: 0 }}>Analyze a local PDF or TXT file</h3>
+          <p style={{ margin: 0 }}>Choose or drop your VA decision letter PDF or TXT file. The text is extracted locally first, then securely sent to our AI provider for analysis. We never store your files.</p>
 
           <div
             onDrop={onDrop}
@@ -145,7 +159,7 @@ export default function App() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="application/pdf"
+              accept=".pdf,.txt,application/pdf,text/plain"
               style={{ display: "none" }}
               onChange={(e) => onFileChosen(e.target.files?.[0] || undefined)}
             />
@@ -160,86 +174,43 @@ export default function App() {
           </div>
         )}
 
-        {/* Guardrail warning */}
-        {parsed && looksLikeVA === false && !overrideProceed && (
-          <div style={bannerWarn}>
-            <div style={{ fontWeight: 600, marginBottom: 6 }}>Heads up: this doesn’t look like a standard VA decision letter.</div>
-            <ul style={{ margin: "0 0 8px 18px" }}>
-              {vaSignals.slice(0, 4).map((s, i) => <li key={i}>{s}</li>)}
-            </ul>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setOverrideProceed(true)}>Analyze anyway</button>
-              <button onClick={() => { setParsed(null); setRaw(""); setLooksLikeVA(null); }}>Cancel</button>
-            </div>
-          </div>
-        )}
-
-        {/* Parsed summary */}
-        {(parsed && (looksLikeVA || overrideProceed)) && (
-          <section style={{ display: "grid", gap: 10 }}>
-            <h3 style={{ marginBottom: 4 }}>Summary</h3>
-            <div style={{ fontSize: 12, color: "#607d8b" }}>
-              Confidence: <strong>{parsed.confidence}</strong>
-              {parsed.combinedRatingStated != null && <> • Combined rating (stated): <strong>{parsed.combinedRatingStated}%</strong></>}
-              {parsed.effectiveDates.length > 0 && <> • Effective dates found: {parsed.effectiveDates.join(", ")}</>}
+        {/* AI section (only when guardrail passes) */}
+        {parsed && looksLikeVA && (
+          <div style={{ display: "grid", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <input
+                id="cloudConsent"
+                type="checkbox"
+                checked={cloudConsent}
+                onChange={(e) => setCloudConsent(e.target.checked)}
+                disabled={!ENABLE_AI}
+              />
+              <label htmlFor="cloudConsent" style={{ userSelect: "none" }}>
+                Allow cloud processing for AI summary
+              </label>
+              <button onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
+                {aiBusy ? "Summarizing…" : "AI Summary"}
+              </button>
             </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    <th style={th}>Condition</th>
-                    <th style={th}>Rating</th>
-                    <th style={th}>DC</th>
-                    <th style={th}>Effective date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parsed.conditions.map((c, i) => (
-                    <tr key={i}>
-                      <td style={td}>{c.name}</td>
-                      <td style={td}>{c.ratingPercent != null ? `${c.ratingPercent}%` : "—"}</td>
-                      <td style={td}>{c.diagnosticCode ?? "—"}</td>
-                      <td style={td}>{c.effectiveDate ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* AI section */}
-            <div style={{ display: "grid", gap: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input
-                  id="cloudConsent"
-                  type="checkbox"
-                  checked={cloudConsent}
-                  onChange={(e) => setCloudConsent(e.target.checked)}
-                  disabled={!ENABLE_AI}
-                />
-                <label htmlFor="cloudConsent" style={{ userSelect: "none" }}>
-                  Allow cloud processing for AI summary
-                </label>
-                <button onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
-                  {aiBusy ? "Summarizing…" : ENABLE_AI ? "AI Summary" : "AI Summary (coming soon)"}
-                </button>
+            {aiText && (
+              <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap" }}>
+                {aiText}
               </div>
-
-              {aiText && (
-                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap" }}>
-                  {aiText}
-                </div>
-              )}
-            </div>
-          </section>
-        )}
-
-        {/* Extracted but not parsed */}
-        {!parsed && raw && !error && (
-          <div style={{ fontSize: 12, color: "#607D8B" }}>
-            We extracted text, but couldn’t confidently detect a standard VA decision format.
+            )}
           </div>
         )}
+
+        {parsed && looksLikeVA === false && (
+          <div style={bannerWarn}>
+            This doesn’t appear to be a VA decision letter. To protect your privacy and keep this tool free,
+            AI analysis is only available for VA decision letters. Please upload your official VA decision/rating letter.
+            <div style={{ marginTop: 6, fontSize: 12, color: "#7a7a7a" }}>
+              Tips: Look for headings like “Decision”, “Evidence”, “Reasons for Decision”, and phrases like “Diagnostic Code”, “Combined Rating”, or “Effective Date”.
+            </div>
+          </div>
+        )}
+
 
         {/* Error banner (friendly text for image-only PDFs included) */}
         {error && (

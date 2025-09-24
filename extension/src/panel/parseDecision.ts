@@ -232,73 +232,41 @@ function clampPct(v: string | number) {
 // --- VA fingerprint / guardrail ---
 // Heuristic check to prevent "any random PDF" from being analyzed.
 // Uses both the raw text and what our parser found.
-export function assessVAFingerprint(
-  rawText: string,
-  parsed: ParsedDecision
-): { looksLikeVA: boolean; score: number; signals: string[] } {
-  const text = rawText.toLowerCase();
 
+export type Fingerprint = {
+  looksLikeVA: boolean;
+  score: number;              // 0–100
+  confidence: "low" | "medium" | "high";
+  signals: string[];
+};
+
+// Heuristic scoring — tuned for VA decision letters
+export function assessVAFingerprint(raw: string, parsed: ParsedDecision): Fingerprint {
+  const text = raw.toLowerCase();
   let score = 0;
   const signals: string[] = [];
+  const hit = (cond: boolean, pts: number, label: string) => {
+    if (cond) { score += pts; signals.push(label); }
+  };
 
-  // 1) Section anchors
-  const anchors = ["decision", "evidence", "reasons", "reasons for decision", "reasons and bases", "references"];
-  const anchorHits = anchors.filter((a) => text.includes(a));
-  if (anchorHits.length >= 2) {
-    score += 2;
-    signals.push(`Anchors found: ${anchorHits.slice(0, 3).join(", ")}`);
-  } else if (anchorHits.length === 1) {
-    score += 1;
-    signals.push(`Anchor found: ${anchorHits[0]}`);
-  }
+  hit(/\bdepartment of veterans affairs\b/.test(text), 20, "Header: Department of Veterans Affairs");
+  hit(/\bdecision\b/.test(text) && /(evidence|reasons?\s+for\s+decision)/i.test(raw), 20, "Sections: Decision + Evidence/Reasons");
+  hit(/\bdiagnostic code\b/i.test(raw), 15, "Mentions Diagnostic Code");
+  hit(/\bcombined (rating|evaluation)\b/i.test(raw), 10, "Combined rating stated");
+  hit(/\beffective date\b/i.test(raw), 10, "Effective date present");
+  hit(/\bservice[- ]connection(ed)?\b/i.test(raw), 10, "Service connection wording");
+  hit(/\b(\d{1,3})\s?%/.test(raw), 10, "Percent ratings present");
+  hit((parsed?.conditions?.length ?? 0) > 0, 10, "Conditions parsed");
 
-  // 2) VA-ish identifiers
-  if (text.includes("department of veterans affairs") || text.includes("veterans affairs")) {
-    score += 2;
-    signals.push("Contains 'Department of Veterans Affairs'");
-  }
-  if (/\bva file number\b|\bclaim number\b/.test(text)) {
-    score += 1;
-    signals.push("Contains VA file/claim number");
-  }
+  // Light bonuses
+  hit(raw.split(/\s+/).length > 400, 5, "Length > 400 words");
+  hit(/page\s+\d+\s+of\s+\d+/i.test(raw), 5, "Page x of y footer");
 
-  // 3) Parser signals
-  if (parsed.diagnosticCodes.length > 0) {
-    score += 1;
-    signals.push(`Diagnostic codes detected (${parsed.diagnosticCodes.length})`);
-  }
-  if (parsed.conditions.some((c) => c.ratingPercent != null)) {
-    score += 1;
-    signals.push("One or more condition ratings detected");
-  }
-  if (parsed.effectiveDates.length > 0 || parsed.conditions.some((c) => c.effectiveDate)) {
-    score += 1;
-    signals.push("Effective date(s) detected");
-  }
-  if (parsed.combinedRatingStated != null) {
-    score += 1;
-    signals.push("Combined rating stated");
-  }
+  let confidence: "low" | "medium" | "high" = "low";
+  if (score >= 55) confidence = "high";
+  else if (score >= 35) confidence = "medium";
 
-  // 4) Phrases common in decisions
-  if (/\bservice connection\b/.test(text)) {
-    score += 1;
-    signals.push("Contains 'service connection'");
-  }
-  if (/\bdiagnostic code\s*\d{4}\b/i.test(rawText)) {
-    // already counted via parsed but reinforces
-    score += 0.5;
-  }
-  if (/\bevaluation\b|\brating\b/.test(text)) {
-    score += 0.5;
-  }
-  if (/\beffective\s+(date|[A-Za-z]+ \d{1,2}, \d{4}|\d{4}-\d{2}-\d{2})\b/i.test(rawText)) {
-    score += 0.5;
-  }
-
-  // Threshold: 3+ feels like a VA decision letter
-  const looksLikeVA = score >= 3;
-
-  return { looksLikeVA, score, signals };
+  const looksLikeVA = score >= 35; // require at least medium
+  return { looksLikeVA, score, confidence, signals };
 }
 
