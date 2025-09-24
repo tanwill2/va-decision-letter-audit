@@ -21,14 +21,7 @@ export default defineManifest({
   },
   permissions: ["activeTab", "scripting", "storage", "downloads"],
   // keep minimal host permissions; request others at runtime
-  host_permissions: [
-    "*://*.va.gov/*",
-    "*://*/*.pdf",
-    "https://api.openai.com/*"
-  ],
-  optional_host_permissions: [
-    "<all_urls>",           // we’ll request origin-specific permission when importing a URL
-  ],
+  host_permissions: ["<all_urls>"],
   background: { service_worker: "src/background.ts", type: "module" },
   content_scripts: [
     {
@@ -38,6 +31,6 @@ export default defineManifest({
     }
   ],
   web_accessible_resources: [
-  { resources: ["panel.html", "assets/*", "pdf.worker.min.mjs", "ocr/*"], matches: ["<all_urls>"] }
+  { resources: ["panel.html", "assets/*", "pdf.worker.min.mjs"], matches: ["<all_urls>"] }
   ],
 });

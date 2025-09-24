@@ -1,44 +1,26 @@
 import React, { useRef, useState } from "react";
 import { extractPdfTextFromFile } from "./useLocalPdf";
 import { parseDecision, ParsedDecision, assessVAFingerprint } from "./parseDecision";
-import { ocrPdfFile } from "./useLocalOcr";
 import { ENABLE_AI, buildAiPayload, requestAiSummary } from "./ai";
 
 // --- Limits ---
 const MAX_FILE_MB = 25;
 const MAX_PAGES = 60;
 
-async function requestOriginPermission(url: string): Promise<boolean> {
-  try {
-    const origin = new URL(url).origin + "/*";
-    // @ts-ignore types for chrome may not include permissions API; MV3 supports it
-    const granted = await chrome.permissions.request?.({ origins: [origin] });
-    // If the API isn’t available, just proceed (will work for many public URLs anyway)
-    return granted ?? true;
-  } catch {
-    return true;
-  }
-}
-
-
 export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Core state
   const [busy, setBusy] = useState(false);
   const [raw, setRaw] = useState<string>("");
   const [parsed, setParsed] = useState<ParsedDecision | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Guardrail state
+  // Guardrails
   const [looksLikeVA, setLooksLikeVA] = useState<boolean | null>(null);
   const [vaSignals, setVaSignals] = useState<string[]>([]);
   const [overrideProceed, setOverrideProceed] = useState(false);
 
-  // URL import
-  const [pdfUrl, setPdfUrl] = useState("");
-
-  // OCR state
-  const [lastFile, setLastFile] = useState<File | null>(null);
-  const [ocrPct, setOcrPct] = useState<number>(0);
 
   // AI state
   const [cloudConsent, setCloudConsent] = useState(false);
@@ -56,8 +38,6 @@ export default function App() {
     setLooksLikeVA(null);
     setVaSignals([]);
     setOverrideProceed(false);
-    setLastFile(file);
-    setOcrPct(0);
     setAiText("");
 
     const sizeMb = file.size / (1024 * 1024);
@@ -74,17 +54,29 @@ export default function App() {
         setError(`This PDF has ${out.pageCount} pages. Limit is ${MAX_PAGES} pages for the MVP.`);
         return;
       }
+
+      // If the PDF has no selectable text, explain clearly (no jargon)
+      if (!out.hadText || !out.text.trim()) {
+        setRaw("");
+        setParsed(null);
+        setLooksLikeVA(null);
+        setVaSignals([]);
+        setError(
+          "We couldn’t read the words from this file. This usually happens when the letter is a photo/scan instead of real text. " +
+          "If possible, try to get a clearer copy of your decision letter or re-save it as a text-based PDF. " +
+          "You can also use a free PDF-to-Text tool (for example: https://www.adobe.com/acrobat/online/pdf-to-text.html) and then upload the result here."
+        );
+        return;
+      }
+
       setRaw(out.text);
 
-      if (!out.hadText) {
-        setError("No selectable text found. This looks like a scanned PDF. You can run local OCR below.");
-      } else {
-        const p = parseDecision(out.text);
-        setParsed(p);
-        const fp = assessVAFingerprint(out.text, p);
-        setLooksLikeVA(fp.looksLikeVA);
-        setVaSignals(fp.signals);
-      }
+      // Normal parse path
+      const p = parseDecision(out.text);
+      setParsed(p);
+      const fp = assessVAFingerprint(out.text, p);
+      setLooksLikeVA(fp.looksLikeVA);
+      setVaSignals(fp.signals);
     } catch (e: any) {
       setError(e?.message || "Could not read that PDF.");
     } finally {
@@ -104,72 +96,7 @@ export default function App() {
   };
   const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
-  // Import from URL
-  const onImportUrl = async () => {
-    const url = pdfUrl.trim();
-    if (!/^https?:\/\//i.test(url)) {
-      setError("Please enter a valid http(s) URL to a PDF.");
-      return;
-    }
-    // NEW: ask for permission for that origin (Web Store friendly)
-    const ok = await requestOriginPermission(url);
-    if (!ok) {
-      setError("Permission was not granted for that site. Please download the PDF and use local upload.");
-      return;
-    }
-    setError(null);
-    setBusy(true);
-    setParsed(null);
-    setRaw("");
-    setLooksLikeVA(null);
-    setVaSignals([]);
-    setOverrideProceed(false);
-    setLastFile(null);
-    setOcrPct(0);
-    setAiText("");
-
-    try {
-      const resp = (await chrome.runtime.sendMessage({ type: "FETCH_PDF_URL", url })) as any;
-      if (!resp?.ok) throw new Error(resp?.error || "Fetch failed");
-      const bytes = base64ToUint8(resp.base64);
-      const file = new File([bytes], "import.pdf", { type: "application/pdf" });
-      await runExtractionOnFile(file);
-    } catch (e: any) {
-      setError(e?.message || "Could not import that URL.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // OCR on last file
-  const onRunOcr = async () => {
-    if (!lastFile) return;
-    setError(null);
-    setBusy(true);
-    setParsed(null);
-    setRaw("");
-    setLooksLikeVA(null);
-    setVaSignals([]);
-    setOverrideProceed(false);
-    setOcrPct(0);
-    setAiText("");
-
-    try {
-      const out = await ocrPdfFile(lastFile, ({ pct }) => setOcrPct(pct));
-      setRaw(out.text);
-      const p = parseDecision(out.text);
-      setParsed(p);
-      const fp = assessVAFingerprint(out.text, p);
-      setLooksLikeVA(fp.looksLikeVA);
-      setVaSignals(fp.signals);
-    } catch (e: any) {
-      setError(e?.message || "OCR failed.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // AI summary (stub)
+  // AI summary
   const onAiSummary = async () => {
     if (!parsed) return;
     if (!cloudConsent && ENABLE_AI) {
@@ -200,26 +127,6 @@ export default function App() {
       </header>
 
       <main style={{ padding: 16, gap: 12, display: "flex", flexDirection: "column", overflow: "auto" }}>
-        {/* Import from URL */}
-        <section style={{ display: "grid", gap: 8 }}>
-          <h3 style={{ margin: 0 }}>Import from URL (optional)</h3>
-          <p style={{ margin: 0 }}>Paste a direct link to a PDF (e.g., from VA.gov or Google Drive sharing).</p>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              value={pdfUrl}
-              onChange={(e) => setPdfUrl(e.target.value)}
-              placeholder="https://example.com/your-decision.pdf"
-              style={{ flex: 1, padding: "8px 10px", border: "1px solid #ddd", borderRadius: 8 }}
-            />
-            <button onClick={onImportUrl} disabled={busy || !pdfUrl.trim()}>
-              {busy ? "Fetching…" : "Fetch & Analyze"}
-            </button>
-          </div>
-          <div style={{ fontSize: 11, color: "#9e9e9e" }}>
-            If the site blocks cross-origin downloads, download the PDF and use the local upload below.
-          </div>
-        </section>
-
         {/* Upload area */}
         <section style={{ display: "grid", gap: 8 }}>
           <h3 style={{ margin: 0 }}>Analyze a local PDF</h3>
@@ -244,18 +151,6 @@ export default function App() {
             />
           </div>
         </section>
-
-        {/* If scanned → OCR option */}
-        {error?.toLowerCase().includes("scanned") && lastFile && (
-          <div style={bannerInfo}>
-            <div style={{ marginBottom: 8 }}>
-              🛈 This looks like a scanned PDF (no selectable text). You can run <b>local OCR</b> below. Your file never leaves your device.
-            </div>
-            <button onClick={onRunOcr} disabled={busy}>
-              {busy ? `Running OCR… ${ocrPct}%` : "Run OCR (Local)"}
-            </button>
-          </div>
-        )}
 
         {/* Confidence banner */}
         {parsed && looksLikeVA && (
@@ -342,24 +237,18 @@ export default function App() {
         {/* Extracted but not parsed */}
         {!parsed && raw && !error && (
           <div style={{ fontSize: 12, color: "#607D8B" }}>
-            We extracted text, but couldn’t confidently detect a standard VA decision format. We’ll add OCR/AI checks next.
+            We extracted text, but couldn’t confidently detect a standard VA decision format.
           </div>
         )}
 
-        {error && !error.toLowerCase().includes("scanned") && (
+        {/* Error banner (friendly text for image-only PDFs included) */}
+        {error && (
           <div style={{ background: "#fff3cd", border: "1px solid #ffeeba", color: "#856404", padding: 12, borderRadius: 8 }}>
             {error}
           </div>
         )}
 
-        <div style={{ fontSize: 11, color: "#9e9e9e", marginTop: 8 }}>
-          This tool provides a plain-English summary and possible fields. It is not legal advice.
-        </div>
-                <div style={{ fontSize: 11, color: "#9e9e9e", marginTop: 8 }}>
-          This tool provides a plain-English summary and possible fields. It is not legal advice.
-        </div>
-
-        {/* Footer with BMAC + About/Privacy */}
+        {/* Footer */}
         <footer style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 12, color: "#607d8b" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <a
@@ -380,8 +269,7 @@ export default function App() {
                   Parsing happens <b>locally</b> in your browser. Your PDFs are <b>not uploaded</b>.
                 </p>
                 <p style={{ margin: "6px 0 0" }}>
-                  If you enable AI later, we’ll clearly ask for consent before any cloud processing.
-                  This tool is not legal advice.
+                  AI features require consent before any cloud processing. This tool is not legal advice.
                 </p>
               </div>
             </details>
@@ -396,13 +284,3 @@ const th: React.CSSProperties = { textAlign: "left", padding: "8px 6px", borderB
 const td: React.CSSProperties = { padding: "8px 6px", borderBottom: "1px solid #f2f2f2", verticalAlign: "top" };
 const bannerGood: React.CSSProperties = { background: "#E8F5E9", border: "1px solid #C8E6C9", color: "#256029", padding: 12, borderRadius: 8 };
 const bannerWarn: React.CSSProperties = { background: "#FFF8E1", border: "1px solid #FFECB3", color: "#7A4F01", padding: 12, borderRadius: 8 };
-const bannerInfo: React.CSSProperties = { background: "#E3F2FD", border: "1px solid #BBDEFB", color: "#0D47A1", padding: 12, borderRadius: 8 };
-
-// helper: base64 -> Uint8Array
-function base64ToUint8(b64: string) {
-  const binStr = atob(b64);
-  const len = binStr.length;
-  const bytes = new Uint8Array(len);
-  for (let i = 0; i < len; i++) bytes[i] = binStr.charCodeAt(i);
-  return bytes;
-}

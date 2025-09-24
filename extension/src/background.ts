@@ -53,25 +53,6 @@ chrome.runtime.onMessage.addListener((msg: any, sender) => {
 
 // … keep your OPEN_PANEL listener above …
 
-// Fetch a PDF from a URL in the service worker to avoid CORS issues
-chrome.runtime.onMessage.addListener((msg: any, _sender, sendResponse) => {
-  if (msg?.type === "FETCH_PDF_URL" && typeof msg.url === "string") {
-    (async () => {
-      try {
-        const res = await fetch(msg.url, { credentials: "omit", mode: "cors" });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const buf = await res.arrayBuffer();
-
-        // Convert to base64 (so it's easy to pass through message)
-        const base64 = arrayBufferToBase64(buf);
-        sendResponse({ ok: true, base64 });
-      } catch (e: any) {
-        sendResponse({ ok: false, error: e?.message || "Fetch failed" });
-      }
-    })();
-    return true; // keep the message channel open for async sendResponse
-  }
-});
 
 // Helper: ArrayBuffer -> base64
 function arrayBufferToBase64(buffer: ArrayBuffer) {
