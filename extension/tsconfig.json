@@ -1,4 +1,6 @@
-{  "compilerOptions": {
+// tsconfig.json
+{
+  "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -8,5 +10,5 @@
     "lib": ["ES2021", "DOM"],
     "types": ["chrome", "node"]
   },
-  "include": ["src", "manifest.ts", "vite.config.ts"]
+  "include": ["src", "manifest.ts", "vite.config.ts", "popup.html"]
 }

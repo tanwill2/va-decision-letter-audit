@@ -37,7 +37,7 @@ export default function App() {
   const [aiBusy, setAiBusy] = useState(false);
   const [aiText, setAiText] = useState<string>("");
 
-  const handleClose = () => window.parent.postMessage({ type: "VA_AUDIT_CLOSE" }, "*");
+  const handleClose = () => window.close();
   const onPickClick = () => fileInputRef.current?.click();
 
   async function runExtractionOnFile(file: File) {
@@ -138,26 +138,41 @@ export default function App() {
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", height: "100%", display: "flex", flexDirection: "column" }}>
-      <header style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 16px",borderBottom:"1px solid #eee"}}>
-        <strong>VA Decision Letter Audit</strong>
-        <button onClick={handleClose} title="Close panel" aria-label="Close panel">✕</button>
+      <header style={{
+        display:"flex",
+        justifyContent:"space-between",
+        alignItems:"flex-start",
+        padding:"12px 16px",
+        borderBottom:"1px solid #eee"
+      }}>
+        <div>
+          <div style={{fontWeight:700}}>VA Decision Letter Audit</div>
+          <div style={{fontSize:12, color:"#607d8b", marginTop:2}}>
+            Plain-English summaries of VA decision letters
+          </div>
+        </div>
+        <button onClick={handleClose} title="Close" aria-label="Close"
+          style={{ border:"1px solid #e5e7eb", background:"#fff", borderRadius:6, padding:"2px 6px" }}>
+          ✕
+        </button>
       </header>
-
       <main style={{ padding: 16, gap: 12, display: "flex", flexDirection: "column", overflow: "auto" }}>
         {/* Upload area */}
         <section style={{ display: "grid", gap: 8 }}>
-          <h3 style={{ margin: 0 }}>Analyze a local PDF or TXT file</h3>
-          <p style={{ margin: 0 }}>Choose or drop your VA decision letter PDF or TXT file. The text is extracted locally first, then securely sent to our AI provider for analysis. We never store your files.</p>
-
+          <h3 style={{ margin: 0 }}>Upload Decision Letter</h3>
+          <p style={{ margin: 0 }}>
+            Choose or drop your VA decision letter PDF or TXT file. We never store your files.
+            Text is extracted locally first, then securely analyzed.
+          </p>
           <div
             onDrop={onDrop}
             onDragOver={onDragOver}
             style={{ border: "2px dashed #cfd8dc", borderRadius: 12, padding: 16, textAlign: "center", background: "#fafafa" }}
           >
-            <p style={{ margin: "0 0 8px 0" }}>Drag & drop a PDF here</p>
-            <p style={{ margin: 0 }}>— or —</p>
+            <p style={{ margin: "0 0 8px 0" }}>Drag & drop a PDF or TXT file here</p>
+            <p style={{ margin: 0 }}>- or -</p>
             <div style={{ marginTop: 8 }}>
-              <button onClick={onPickClick} disabled={busy}>{busy ? "Reading…" : "Choose PDF"}</button>
+              <button onClick={onPickClick} disabled={busy}>{busy ? "Reading…" : "Choose File"}</button>
             </div>
             <input
               ref={fileInputRef}
@@ -177,7 +192,7 @@ export default function App() {
           </div>
         )}
 
-        {/* AI section — gate on medium/high confidence */}
+        {/* AI section - gate on medium/high confidence */}
         {parsed && looksLikeVA && (fpConfidence === "medium" || fpConfidence === "high") && (
           <div style={{ display: "grid", gap: 8 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -201,9 +216,22 @@ export default function App() {
                 <div style={{ fontSize: 11, color: "#9e9e9e" }}>
                   ⚠️ This summary is for informational purposes only. It is not legal advice.
                 </div>
-                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap" }}>
+
+                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto" }}>
                   {aiText}
                 </div>
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={onAiSummary} disabled={aiBusy || !parsed}>
+                    {aiBusy ? "Summarizing…" : "Re-run Summary"}
+                  </button>
+                  <button
+                    onClick={async () => { try { await navigator.clipboard.writeText(aiText); } catch {} }}
+                  >
+                    Copy Text
+                  </button>
+                </div>
+
                 <div style={{ fontSize: 11, color: "#9e9e9e" }}>
                   ⚠️ This summary is for informational purposes only. It is not legal advice.
                 </div>
@@ -234,7 +262,7 @@ export default function App() {
         <footer style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 12, color: "#607d8b" }}>
           <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
             <a
-              href="https://buymeacoffee.com/tanwill2"
+              href="https://buymeacoffee.com/kairobox"
               target="_blank"
               rel="noopener noreferrer"
               style={{ textDecoration: "none", fontWeight: 600 }}
@@ -248,7 +276,6 @@ export default function App() {
               <div style={{ marginTop: 6, lineHeight: 1.5 }}>
                 <p style={{ margin: 0 }}>
                   <b>VA Decision Letter Audit</b> helps you read VA decision letters in plain English.
-                  Parsing happens <b>locally</b> in your browser. Your PDFs are <b>not uploaded</b>.
                 </p>
                 <p style={{ margin: "6px 0 0" }}>
                   AI features require consent before any cloud processing. This tool is not legal advice.
