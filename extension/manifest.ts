@@ -7,11 +7,12 @@ export default defineManifest({
   version: "0.1.0",
   description: "Reads VA decision letters and produces a plain-English summary.",
 
-  // icons: {
-  //   "16": "extension/assets/icon16.png",
-  //   "48": "extension/assets/icon48.png",
-  //   "128": "extension/assets/icon128.png",
-  // },
+    icons: {
+      "16": "assets/icons/icon16.png",
+      "48": "assets//icons/icon48.png",
+      "128": "assets/icons/icon128.png",
+    },
+
 
   // ▶ Popup UI (no more side panel)
   action: {
