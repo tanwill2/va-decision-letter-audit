@@ -21,9 +21,4 @@ export default defineManifest({
 
   // no host permissions, no content scripts for popup-only flow
   permissions: [],
-
-  background: {
-    service_worker: "src/background.ts",
-    type: "module",
-  },
 });
