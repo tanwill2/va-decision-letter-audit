@@ -90,8 +90,8 @@ Write the summary with EXACTLY these sections (keep them in this order):
 4) Effective dates
 - List important effective dates and what they mean for payments.
 
-5) Favorable findings (if any)
-- If the letter has a "Favorable Findings" section, summarize it.
+5) Favorable findings
+- If the letter has Favorable Findings for any denial or section, summarize it. This is imporant. Look for the term "favorable findings."
 - If not explicitly present, infer favorable points (e.g., service connection established, condition recognized, effective date maintained, key evidence accepted). Keep it factual.
 
 6) Denials (if any)
