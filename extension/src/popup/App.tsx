@@ -86,6 +86,19 @@ export default function App() {
     }
   }
 
+  function extractSection(aiText: string, header: string): string | null {
+  if (!aiText) return null;
+  const idx = aiText.indexOf(header);
+  if (idx === -1) return null;
+  // find the next numbered header like "7) " or "8) "
+  const next = aiText.slice(idx + header.length).search(/\n\s*\d\)\s+/);
+  const body = next === -1
+    ? aiText.slice(idx + header.length).trim()
+    : aiText.slice(idx + header.length, idx + header.length + next).trim();
+  return body || null;
+}
+
+
   const onFileChosen = async (file?: File) => {
     if (!file) return;
     await runExtractionOnFile(file);
@@ -125,6 +138,10 @@ export default function App() {
       setAiBusy(false);
     }
   };
+
+  const favorable = extractSection(aiText, "5) Favorable findings");
+  const denials = extractSection(aiText, "6) Denials");
+
 
   return (
     <div className="wrap">
@@ -184,24 +201,52 @@ export default function App() {
       {parsed && looksLikeVA && (fpConfidence === "medium" || fpConfidence === "high") && (
         <section className="card" style={{ display: "grid", gap: 8 }}>
           <h3>AI Summary</h3>
-          <div className="row">
-            <label className="checkbox">
-              <input
-                id="cloudConsent"
-                type="checkbox"
-                checked={cloudConsent}
-                onChange={(e) => setCloudConsent(e.target.checked)}
-                disabled={!ENABLE_AI}
-              />
-              <span>Allow cloud processing for AI summary</span>
-            </label>
-            <button className="btn" onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
-              {aiBusy ? "Summarizing…" : "Run AI"}
-            </button>
-          </div>
+            <div className="row">
+              <label className="checkbox">
+                <input
+                  id="cloudConsent"
+                  type="checkbox"
+                  checked={cloudConsent}
+                  onChange={(e) => setCloudConsent(e.target.checked)}
+                  disabled={!ENABLE_AI}
+                />
+                <span>Allow cloud processing for AI summary</span>
+              </label>
 
+              <button className="btn" onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
+                {aiBusy ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+                    <span className="spinner"></span> Summarizing…
+                  </span>
+                ) : (
+                  "Run AI"
+                )}
+              </button>
+
+              {/* Retry appears only when there is an AI-related error */}
+              {error && /AI summary failed|Please allow cloud processing/.test(error) && (
+                <button className="btn" onClick={onAiSummary} disabled={aiBusy}>
+                  Retry
+                </button>
+              )}
+            </div>
           {aiText && (
-            <div style={{ display: "grid", gap: 6 }}>
+            <div style={{ display: "grid", gap: 10 }}>
+              {/* Callouts */}
+              {favorable && (
+                <div className="banner-good">
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Favorable findings</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{favorable}</div>
+                </div>
+              )}
+              {denials && denials.toLowerCase().trim() !== "no denials in this letter." && (
+                <div className="banner-warn">
+                  <div style={{ fontWeight: 700, marginBottom: 6 }}>Denials</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{denials}</div>
+                </div>
+              )}
+
+              {/* Disclaimer + full text */}
               <div className="ai-note">⚠️ This summary is for informational purposes only. It is not legal advice.</div>
               <div className="ai-output">{aiText}</div>
               <div className="ai-note">⚠️ This summary is for informational purposes only. It is not legal advice.</div>
