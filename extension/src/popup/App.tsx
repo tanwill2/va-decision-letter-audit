@@ -13,7 +13,7 @@ async function extractFromAnyFile(file: File) {
   return await extractPdfTextFromFile(file);
 }
 
-// --- Limits ---
+// Limits
 const MAX_FILE_MB = 25;
 const MAX_PAGES = 60;
 
@@ -30,14 +30,11 @@ export default function App() {
   const [looksLikeVA, setLooksLikeVA] = useState<boolean | null>(null);
   const [fpConfidence, setFpConfidence] = useState<"low" | "medium" | "high" | null>(null);
 
-
-
   // AI state
   const [cloudConsent, setCloudConsent] = useState(false);
   const [aiBusy, setAiBusy] = useState(false);
   const [aiText, setAiText] = useState<string>("");
 
-  const handleClose = () => window.close();
   const onPickClick = () => fileInputRef.current?.click();
 
   async function runExtractionOnFile(file: File) {
@@ -63,29 +60,27 @@ export default function App() {
         return;
       }
 
-      // If the PDF has no selectable text, explain clearly (no jargon)
       if (!out.hadText || !out.text.trim()) {
         setRaw("");
         setParsed(null);
         setLooksLikeVA(null);
         setError(
           "We couldn’t read the words from this file. This usually happens when the letter is a photo/scan instead of real text. " +
-          "If possible, try to get a clearer copy of your decision letter or re-save it as a text-based PDF. " +
-          "You can also use a free PDF-to-Text tool (for example: https://www.freeconvert.com/pdf-to-text) and then upload the result here."
+            "If possible, try to get a clearer copy of your decision letter or re-save it as a text-based PDF. " +
+            "You can also use a free PDF-to-Text tool (for example: https://www.freeconvert.com/pdf-to-text) and then upload the result here."
         );
         return;
       }
 
       setRaw(out.text);
 
-      // Normal parse path
       const p = parseDecision(out.text);
       setParsed(p);
       const fp = assessVAFingerprint(out.text, p);
       setLooksLikeVA(fp.looksLikeVA);
       setFpConfidence(fp.confidence);
     } catch (e: any) {
-      setError(e?.message || "Could not read that PDF.");
+      setError(e?.message || "Could not read that file.");
     } finally {
       setBusy(false);
     }
@@ -99,21 +94,16 @@ export default function App() {
   const onDrop: React.DragEventHandler<HTMLDivElement> = async (e) => {
     e.preventDefault();
     const f = e.dataTransfer?.files?.[0];
-      if (!f) return;
-      if (
-        f.type === "application/pdf" ||
-        f.type === "text/plain" ||
-        /\.txt$/i.test(f.name)
-      ) {
-        onFileChosen(f);
-      }
+    if (!f) return;
+    if (f.type === "application/pdf" || f.type === "text/plain" || /\.txt$/i.test(f.name)) {
+      onFileChosen(f);
+    }
   };
   const onDragOver: React.DragEventHandler<HTMLDivElement> = (e) => e.preventDefault();
 
   // AI summary
   const onAiSummary = async () => {
     if (!parsed) return;
-      // Hard gate: only allow medium/high confidence
     if (!looksLikeVA || !(fpConfidence === "medium" || fpConfidence === "high")) {
       setError("AI analysis is only available for recognized VA decision letters.");
       return;
@@ -137,43 +127,28 @@ export default function App() {
   };
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", height: "100%", display: "flex", flexDirection: "column" }}>
-      <header style={{
-        display:"flex",
-        justifyContent:"space-between",
-        alignItems:"flex-start",
-        padding:"12px 16px",
-        borderBottom:"1px solid #eee"
-      }}>
-        <div>
-          <div style={{fontWeight:700}}>VA Decision Letter Audit</div>
-          <div style={{fontSize:12, color:"#607d8b", marginTop:2}}>
-            Plain-English summaries of VA decision letters
-          </div>
+    <div className="wrap">
+      {/* Header */}
+      <div className="header">
+        <div className="brand">
+          <span>🇺🇸</span>
+          <span>VA Decision Letter Audit</span>
         </div>
-        <button onClick={handleClose} title="Close" aria-label="Close"
-          style={{ border:"1px solid #e5e7eb", background:"#fff", borderRadius:6, padding:"2px 6px" }}>
-          ✕
-        </button>
-      </header>
-      <main style={{ padding: 16, gap: 12, display: "flex", flexDirection: "column", overflow: "auto" }}>
-        {/* Upload area */}
-        <section style={{ display: "grid", gap: 8 }}>
-          <h3 style={{ margin: 0 }}>Upload Decision Letter</h3>
-          <p style={{ margin: 0 }}>
-            Choose or drop your VA decision letter PDF or TXT file. We never store your files.
-            Text is extracted locally first, then securely analyzed.
-          </p>
-          <div
-            onDrop={onDrop}
-            onDragOver={onDragOver}
-            style={{ border: "2px dashed #cfd8dc", borderRadius: 12, padding: 16, textAlign: "center", background: "#fafafa" }}
-          >
-            <p style={{ margin: "0 0 8px 0" }}>Drag & drop a PDF or TXT file here</p>
-            <p style={{ margin: 0 }}>- or -</p>
-            <div style={{ marginTop: 8 }}>
-              <button onClick={onPickClick} disabled={busy}>{busy ? "Reading…" : "Choose File"}</button>
-            </div>
+        <span className="badge">Popup</span>
+      </div>
+
+      {/* Upload card */}
+      <section className="card">
+        <h3>Analyze a local PDF or TXT file</h3>
+        <p className="help">We extract text locally first, then securely send to our AI provider for analysis. We never store your files.</p>
+
+        <div className="drop" onDrop={onDrop} onDragOver={onDragOver}>
+          <p style={{ margin: "0 0 8px 0" }}>Drag & drop here</p>
+          <p style={{ margin: 0 }}>— or —</p>
+          <div style={{ marginTop: 8 }}>
+            <button className="btn" onClick={onPickClick} disabled={busy}>
+              {busy ? "Reading…" : "Choose file"}
+            </button>
             <input
               ref={fileInputRef}
               type="file"
@@ -182,20 +157,35 @@ export default function App() {
               onChange={(e) => onFileChosen(e.target.files?.[0] || undefined)}
             />
           </div>
-        </section>
+        </div>
+      </section>
 
-        {/* Confidence banner */}
-        {parsed && looksLikeVA && (
-          <div style={bannerGood}>
-            ✅ This looks like a VA decision letter. Confidence: <b>{fpConfidence}</b>
-            {parsed.combinedRatingStated != null && <> • Combined rating: <b>{parsed.combinedRatingStated}%</b></>}
+      {/* Confidence banner */}
+      {parsed && looksLikeVA && (
+        <div className="banner-good">
+          ✅ This looks like a VA decision letter. Confidence: <b>{fpConfidence}</b>
+          {parsed.combinedRatingStated != null && <> • Combined rating: <b>{parsed.combinedRatingStated}%</b></>}
+        </div>
+      )}
+
+      {/* Low confidence warning */}
+      {parsed && (!looksLikeVA || fpConfidence === "low") && (
+        <div className="banner-warn">
+          This doesn’t appear to be a VA decision letter. To protect your privacy and keep this free,
+          AI analysis is only available for recognized VA decision letters.
+          <div className="help" style={{ marginTop: 6 }}>
+            Tips: Look for headings like “Decision”, “Evidence”, “Reasons for Decision”, and phrases like “Diagnostic Code”,
+            “Combined Rating”, or “Effective Date”.
           </div>
-        )}
+        </div>
+      )}
 
-        {/* AI section - gate on medium/high confidence */}
-        {parsed && looksLikeVA && (fpConfidence === "medium" || fpConfidence === "high") && (
-          <div style={{ display: "grid", gap: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      {/* AI section (gated) */}
+      {parsed && looksLikeVA && (fpConfidence === "medium" || fpConfidence === "high") && (
+        <section className="card" style={{ display: "grid", gap: 8 }}>
+          <h3>AI Summary</h3>
+          <div className="row">
+            <label className="checkbox">
               <input
                 id="cloudConsent"
                 type="checkbox"
@@ -203,91 +193,37 @@ export default function App() {
                 onChange={(e) => setCloudConsent(e.target.checked)}
                 disabled={!ENABLE_AI}
               />
-              <label htmlFor="cloudConsent" style={{ userSelect: "none" }}>
-                Allow cloud processing for AI summary
-              </label>
-              <button onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
-                {aiBusy ? "Summarizing…" : "AI Summary"}
-              </button>
+              <span>Allow cloud processing for AI summary</span>
+            </label>
+            <button className="btn" onClick={onAiSummary} disabled={!ENABLE_AI || aiBusy || !parsed}>
+              {aiBusy ? "Summarizing…" : "Run AI"}
+            </button>
+          </div>
+
+          {aiText && (
+            <div style={{ display: "grid", gap: 6 }}>
+              <div className="ai-note">⚠️ This summary is for informational purposes only. It is not legal advice.</div>
+              <div className="ai-output">{aiText}</div>
+              <div className="ai-note">⚠️ This summary is for informational purposes only. It is not legal advice.</div>
             </div>
+          )}
+        </section>
+      )}
 
-            {aiText && (
-              <div style={{ display: "grid", gap: 6 }}>
-                <div style={{ fontSize: 11, color: "#9e9e9e" }}>
-                  ⚠️ This summary is for informational purposes only. It is not legal advice.
-                </div>
+      {/* Error banner */}
+      {error && (
+        <div className="card" style={{ borderColor: "#ffeeba", background: "#fffdf5" }}>
+          {error}
+        </div>
+      )}
 
-                <div style={{ background: "#fff", border: "1px solid #e5e7eb", borderRadius: 8, padding: 12, whiteSpace: "pre-wrap", maxHeight: 260, overflow: "auto" }}>
-                  {aiText}
-                </div>
-
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={onAiSummary} disabled={aiBusy || !parsed}>
-                    {aiBusy ? "Summarizing…" : "Re-run Summary"}
-                  </button>
-                  <button
-                    onClick={async () => { try { await navigator.clipboard.writeText(aiText); } catch {} }}
-                  >
-                    Copy Text
-                  </button>
-                </div>
-
-                <div style={{ fontSize: 11, color: "#9e9e9e" }}>
-                  ⚠️ This summary is for informational purposes only. It is not legal advice.
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {parsed && (!looksLikeVA || fpConfidence === "low") && (
-          <div style={{ background: "#FFF8E1", border: "1px solid #FFECB3", color: "#7A4F01", padding: 12, borderRadius: 8 }}>
-            This doesn’t appear to be a VA decision letter. To protect your privacy and keep this free,
-            AI analysis is only available for recognized VA decision letters.
-            <div style={{ marginTop: 6, fontSize: 12, color: "#7a7a7a" }}>
-              Tips: Look for headings like “Decision”, “Evidence”, “Reasons for Decision”, and phrases like “Diagnostic Code”,
-              “Combined Rating”, or “Effective Date”.
-            </div>
-          </div>
-        )}
-
-        {/* Error banner (friendly text for image-only PDFs included) */}
-        {error && (
-          <div style={{ background: "#fff3cd", border: "1px solid #ffeeba", color: "#856404", padding: 12, borderRadius: 8 }}>
-            {error}
-          </div>
-        )}
-
-        {/* Footer */}
-        <footer style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 12, color: "#607d8b" }}>
-          <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-            <a
-              href="https://buymeacoffee.com/kairobox"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ textDecoration: "none", fontWeight: 600 }}
-              title="Support this project"
-            >
-              ☕ Support on Buy Me a Coffee
-            </a>
-            <span>•</span>
-            <details>
-              <summary style={{ cursor: "pointer" }}>About & Privacy</summary>
-              <div style={{ marginTop: 6, lineHeight: 1.5 }}>
-                <p style={{ margin: 0 }}>
-                  <b>VA Decision Letter Audit</b> helps you read VA decision letters in plain English.
-                </p>
-                <p style={{ margin: "6px 0 0" }}>
-                  AI features require consent before any cloud processing. This tool is not legal advice.
-                </p>
-              </div>
-            </details>
-          </div>
-        </footer>
-      </main>
+      {/* Footer */}
+      <footer className="card" style={{ padding: 12 }}>
+        <div className="footer">
+          <a className="bmac" href="https://buymeacoffee.com/kairobox" target="_blank" rel="noopener noreferrer">☕ Support</a>
+          <div className="muted">v0.1.0 • About & Privacy: Parsing happens locally. AI requires explicit consent.</div>
+        </div>
+      </footer>
     </div>
   );
 }
-
-const bannerGood: React.CSSProperties = { background: "#E8F5E9", border: "1px solid #C8E6C9", color: "#256029", padding: 12, borderRadius: 8 };
-const bannerWarn: React.CSSProperties = { background: "#FFF8E1", border: "1px solid #FFECB3", color: "#7A4F01", padding: 12, borderRadius: 8 };
