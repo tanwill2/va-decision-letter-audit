@@ -1,36 +1,29 @@
+// extension/manifest.ts
 import { defineManifest } from "@crxjs/vite-plugin";
 
 export default defineManifest({
   manifest_version: 3,
-  name: "VA Decision Letter Audit (MVP)",
+  name: "VA Decision Letter Audit",
   version: "0.1.0",
-  description: "Plain-English summary of VA decision letters. Not legal advice.",
-  // icons for the extension
-  icons: {
-    16: "icons/icon16.png",
-    48: "icons/icon48.png",
-    128: "icons/icon128.png",
-  },
+  description: "Reads VA decision letters and produces a plain-English summary.",
+
+  // icons: {
+  //   "16": "extension/assets/icon16.png",
+  //   "48": "extension/assets/icon48.png",
+  //   "128": "extension/assets/icon128.png",
+  // },
+
+  // ▶ Popup UI (no more side panel)
   action: {
     default_title: "VA Decision Letter Audit",
-    default_icon: {
-      16: "icons/icon16.png",
-      48: "icons/icon48.png",
-      128: "icons/icon128.png",
-    },
+    default_popup: "popup.html",
   },
-  permissions: ["activeTab", "scripting", "storage", "downloads"],
-  // keep minimal host permissions; request others at runtime
-  host_permissions: ["<all_urls>"],
-  background: { service_worker: "src/background.ts", type: "module" },
-  content_scripts: [
-    {
-      matches: ["<all_urls>"],
-      js: ["src/content.ts"],
-      run_at: "document_idle"
-    }
-  ],
-  web_accessible_resources: [
-  { resources: ["panel.html", "assets/*", "pdf.worker.min.mjs"], matches: ["<all_urls>"] }
-  ],
+
+  // no host permissions, no content scripts for popup-only flow
+  permissions: [],
+
+  background: {
+    service_worker: "src/background.ts",
+    type: "module",
+  },
 });
