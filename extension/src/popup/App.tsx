@@ -163,7 +163,7 @@ export default function App() {
       <div className="header">
         <div className="brand">
           <span>🇺🇸</span>
-          <span>VA Decision Letter Audit</span>
+          <span>VA Decision Letter Summary</span>
         </div>
         <span className="badge">Beta</span>
       </div>

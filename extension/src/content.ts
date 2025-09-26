@@ -3,7 +3,7 @@ if (!(window as any).__vaAuditInjected) {
   (window as any).__vaAuditInjected = true;
 
   const btn = document.createElement("button");
-  btn.textContent = "Audit this decision";
+  btn.textContent = "Summarize this decision";
   Object.assign(btn.style, {
     position: "fixed",
     right: "16px",

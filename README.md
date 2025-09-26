@@ -1,5 +1,5 @@
-# va-decision-letter-audit# VA Decision Letter Audit (Chrome Extension)
-AI-powered, plain-English summaries and audits of VA decision letters. Not legal advice.
+# va-decision-letter-summary# VA Decision Letter Summary (Chrome Extension)
+AI-powered, plain-English summaries of VA decision letters. Not legal advice.
 
 ## Roadmap Stages
 1) Summary on-page

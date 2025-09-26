@@ -8,7 +8,7 @@
   <h1>Kairobox Privacy Policy</h1>
   <p><em>Last updated: 09/26/2025</em></p>
 
-  <p>At <strong>Kairobox</strong>, your privacy matters. This Chrome Extension (“VA Decision Letter Audit”) is designed to respect your data and give you control.</p>
+  <p>At <strong>Kairobox</strong>, your privacy matters. This Chrome Extension (“VA Decision Letter Summary) is designed to respect your data and give you control.</p>
 
   <h2>What We Collect</h2>
   <ul>
