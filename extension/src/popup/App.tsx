@@ -165,7 +165,7 @@ export default function App() {
           <span>🇺🇸</span>
           <span>VA Decision Letter Audit</span>
         </div>
-        <span className="badge">Popup</span>
+        <span className="badge">Beta</span>
       </div>
 
       {/* Upload card */}
