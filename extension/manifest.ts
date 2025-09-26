@@ -19,6 +19,9 @@ export default defineManifest({
     default_title: "VA Decision Letter Audit",
     default_popup: "popup.html",
   },
+  
+  // Optional: shows on your Web Store listing
+  homepage_url: "https://kairobox.com",
 
   // no host permissions, no content scripts for popup-only flow
   permissions: [],

@@ -268,14 +268,38 @@ export default function App() {
       )}
 
       {/* Footer */}
-      <footer className="card" style={{ padding: 12 }}>
-        <div className="footer">
-          <a className="bmac" href="https://buymeacoffee.com/kairobox" target="_blank" rel="noopener noreferrer">☕ Support</a>
-          <div className="muted">v0.1.0 • About & Privacy: AI requires explicit consent. Your file is processed locally first, then text is securely sent to the AI provider when you run a summary. 
-Nothing is stored by this extension.
-</div>
-        </div>
-      </footer>
+<footer style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid #eee", fontSize: 12, color: "#607d8b" }}>
+  <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+    <a
+      href="https://buymeacoffee.com/kairobox"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ textDecoration: "none", fontWeight: 600 }}
+      title="Support this project"
+    >
+      ☕ Support on Buy Me a Coffee
+    </a>
+    <span>•</span>
+    <a
+      href="https://kairobox.com/privacy-policy"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ textDecoration: "none" }}
+    >
+      Privacy Policy
+    </a>
+    <span>•</span>
+    <a
+      href="https://kairobox.com/terms-disclaimer"
+      target="_blank"
+      rel="noopener noreferrer"
+      style={{ textDecoration: "none" }}
+    >
+      Terms & Disclaimer
+    </a>
+  </div>
+</footer>
+
       {/* Global bottom legal notice */}
       <div className="notice">
         <strong>Reminder:</strong> This output can miss details and may be inaccurate. It is not an official VA document and not legal advice.
